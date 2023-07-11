@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <meta charset= "UTF-8">
+ <title>Tetris</title>
+</head>
+<body style="background-color: black">
+<div align="center" > 
+ <canvas id = 'canvas' width = '500' height = '600' style = 'background:linear-gradient(to bottom, SteelBlue, LemonChiffon)'></canvas>
+ <h1 style = "color:rgb(255, 0, 0)">Start!</h1>
+</div>
+
+<script src = "https://code.jquery.com/jquery-2.1.0.js"></script>
+<script>
+'use strict';
+const canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+
+let canvasColor = canvas.style.background;
+let colorCanvas = canvasColor;
+
+let width = canvas.width;
+let height = canvas.height;
+
+let boxSize = 25
+let boxX = width / boxSize;
+let boxY = height / boxSize;
+let speed = 1;
+let down = height - boxSize*2;
+let fall = false;
+let oldBack=colorCanvas;
+let color = "Black";
+let colorInside = 'SteelBlue';
+let colorFall = 'rgba(70, 130, 200,1)';
+let fallInside ='rgba(70, 115, 180,1)';
+let boom = false;
+let chenge=false;
+let downY= down;
+let points = height/boxSize/2;
+let s = (width - boxSize*2)/boxSize;
+let chenges = 0;
+let randomX;
+let helpPoint;
+let newBack;
+let win=false;
+
+let i = 0;
+let colors = [ 'LemonChiffon', 'DarkGrey','LightSteelBlue', 'PaleVioletRed', 'Orange', 'DarkSeaGreen', 'MidnightBlue'];
+let boxHeight=height-boxSize*2;
+
+/*стиль по умолчанию!
+  ctx.fillStyle = 'LightBlue';
+  ctx.fillRect(boxSize,boxSize, width-boxSize*2,boxHeight);
+  ctx.font = "70px serif";
+  ctx.fillStyle = 'White';
+
+  ctx.fillText(points-chenges, width/2-boxSize*2, height/4);
+  */
+let getScore = function(){
+ ctx.font = "70px serif";
+ ctx.fillStyle = 'White';
+ if(points-chenges>9){
+ ctx.fillText(points-chenges, width/2-boxSize*2, height/4);
+ } else{
+ ctx.fillText(points-chenges, width/2-boxSize, height/4);
+ }
+ }
+//смена фона
+let getBack = function (){ 
+ newBack = colors[Math.floor(Math.random()*colors.length)];
+ 
+ oldBack = newBack;
+ outer: for(let i=0; i<colors.length; i++){
+  let otherColor = colors[Math.floor(Math.random()*colors.length)];
+  if(otherColor !== newBack){
+  colorCanvas = 'background:linear-gradient(to bottom,'+ newBack + ',' + otherColor +')';
+  } else{
+   continue outer;
+  }
+ }
+ $('canvas').attr('style',colorCanvas);
+ canvasColor = canvas.style.background;
+ //colorCanvas = canvasColor;
+};
+
+let drawBorder = function(){
+ ctx.fillStyle = 'rgba(70, 130, 180,1)';
+ ctx.fillRect(0, 5, width, boxSize);
+ ctx.fillRect(0, height - boxSize, width, boxSize);
+ ctx.fillRect(width - boxSize, 5, boxSize, height);
+ ctx.fillRect(0, 5, boxSize, height);
+ 
+ ctx.fillStyle = 'Red';
+ ctx.fillRect(0,height/3+boxSize,boxSize,3);
+ ctx.fillRect(width - boxSize,height/3+boxSize,boxSize,3);
+};  
+
+//рандомная позиция 
+let getRandomPosition = function(){
+ let boxSizeX = boxSize/boxSize;
+ let widthX = boxX - boxSizeX;
+ randomX = (Math.floor(Math.random() * (widthX-boxSizeX) + boxSizeX) * boxSize);
+};
+
+let getHelp = function(b){
+ ctx.clearRect(boxSize,0,width-boxSize,5);
+ ctx.fillStyle = 'Red';
+ ctx.fillRect(randomX,0,boxSize,5);
+ b.colorInside = colorInside;
+};
+getRandomPosition();
+helpPoint = randomX;
+//сетка
+let Box = function (x, y) {
+ this.x = helpPoint;
+ this.y = -1;
+ this.color = color;
+ this.colorInside = colorInside;
+ this.speed = speed;
+ };
+
+Box.prototype.drawSquare = function (color,colorInside){
+ ctx.fillStyle = color;
+ ctx.fillRect(this.x, this.y, boxSize, boxSize);
+ ctx.fillStyle = 'White';
+ ctx.fillRect(this.x+1, this.y+1, boxSize-2,boxSize-2);
+ ctx.fillStyle = this.colorInside;
+ ctx.fillRect(this.x+2, this.y+2, boxSize-4,boxSize-4);
+ 
+};
+Box.prototype.move = function(){
+ ctx.clearRect(this.x, this.y, boxSize, boxSize);
+ this.y += this.speed;
+};
+
+Box.prototype.checkCollision = function (){
+ if(this.y >= down){
+  this.y = down; 
+ } else 
+ if(this.x >= width-boxSize*2){
+ this.x = width-boxSize*2;
+ } else if (this.x <= boxSize){
+ this.x = boxSize;
+ }; 
+};
+
+Box.prototype.setDirection = function(newDirection){
+ if(newDirection==='right' && !boom && !win ){
+  ctx.clearRect(this.x, this.y, boxSize, boxSize);
+  this.x += boxSize;
+ } else if(newDirection==='left' && !boom && !win){
+  ctx.clearRect(this.x, this.y, boxSize, boxSize);
+  this.x -= boxSize;
+ } else if (newDirection === 'accelerate' && !boom ){
+    this.speed++;
+ }
+};
+
+Box.prototype.equal = function(otherBox){
+ let otherBoxRight = otherBox.x + boxSize;
+ let minHeight = otherBox.y -boxSize;
+ let maxHeight = otherBox.y + boxSize;
+ let otherBoxLeft = otherBox.x - boxSize;
+ for(let j = minHeight ; j<maxHeight; j++){
+  if(this.x == otherBoxRight && this.y == j || this.x == otherBoxLeft && this.y ==j){
+  return boom = true;
+  } else if( this.x == otherBox.x && this.y >= minHeight && this.y <= otherBox.y ){
+   return boom = true;
+  };
+  }
+};
+
+let boxes = [new Box()]; 
+let downBoxes = [];
+
+//изменение цвета при  заполнении уровня
+let getColor = function(){
+ let blocks = 0;
+ if(chenge==true){
+ // downY -= boxSize;
+  chenges ++;
+  chenge=false;
+  getBack();
+ // colorInside = canvas.style.background;
+  colorInside = newBack;
+  ctx.clearRect(boxSize,boxSize,width, height/4);
+ }
+ for(let i=0; i<boxes.length; i++){
+  if (boxes[i].y == downY){
+  blocks++;
+   }
+   }
+  if(blocks === s){
+    for(let j=0; j<boxes.length; j++){
+    if(boxes[j].y == downY){
+	ctx.clearRect(boxSize,boxSize,width,height);
+	boxes[j].y += boxSize;
+	boxes[j].drawSquare(color,colorInside);
+    /* ЕСЛИ ХОЧЕШЬ ЦВЕТНОЙ УРОВЕНЬ
+ 	 boxes[j].color = colorFall;
+	 boxes[j].colorInside = fallInside;
+	 boxes[j].drawSquare(colorFall,fallInside);*/
+    
+     chenge=true;
+	} 
+   }
+  }
+};
+
+//////////////////////////////////////////////////////////////////
+/*let figureOne = [ new Box(x,y), new Box(x+boxSize,y), new Box(x+boxSize*2,y), new Box(x+boxSize*3, y)];
+let figureTwo = [new Box(x,y), new Box(x+boxSize,y), new Box(x+boxSize*2,y), new Box(x+boxSize*2,y+boxSize)];
+let figureThree = [new Box(x,y), new Box(x+boxSize,y), new Box(x+boxSize*2,y), new Box(x+boxSize,y+boxSize)];
+let figureFour = [new Box(x,y), new Box(x+boxSize,y), new Box(x+boxSize*2,y),new Box(x,y + boxSize)];
+*/
+///////////////////////////////////////////////////////////////
+
+let directions = {
+ 37: 'left',
+ 39: 'right',
+ 40: 'accelerate'
+};
+
+$('body').keydown(function(event){
+ let newDirection = directions[event.keyCode];
+ boxes[i].setDirection(newDirection);
+ });
+ 
+ let getAnswer = function(){
+ return confirm("Hello! You must build levels and avoid the red line. Let's start?");
+ };
+  
+  if( getAnswer() === true){
+   $('h1').fadeOut(3000);
+ }
+
+ let getWin = function(){
+ if (chenges == points){
+  win=true;
+  clearInterval(interval);
+  ctx.clearRect(0,0,width,height);
+  alert('Win');
+  ctx.font = "40px serif";
+  ctx.fillStyle = 'LawnGreen';
+  ctx.fillText('Well done!',width/2 -boxSize*4, height/2);
+ }
+};
+
+let interval = setInterval(function(){
+  //проверка
+ if(width%boxSize !== 0 || height%boxSize !== 0 || !Number.isInteger(s) || !Number.isInteger(points)){
+  clearInterval(interval);
+  alert('Enter the correct width, please');
+  ctx.font = "25px serif";
+  ctx.fillText('Well, hello!',width/2 -boxSize*3, height/2);
+  } 
+  
+  boom = false;
+   
+  getColor();
+  getScore();
+  boxes[i].move();  
+  boxes[i].drawSquare(color,colorInside);   
+  boxes[i].checkCollision();
+  boxes[i].setDirection();
+  getHelp(boxes[i]);
+  getWin();
+  
+  if(boxes[i].y === down){
+   boxes[i].drawSquare(color,colorInside);  
+   i++;
+   helpPoint = randomX;
+   getRandomPosition();
+   boxes.push(new Box);
+   
+   } else if (boxes.length > 1){
+    for (let j=0; j<boxes.length-1; j++){
+	let newPositionBox = boxes[j].y - boxSize;
+    boxes[i].equal(boxes[j]);
+	 
+	 //исчезает полный уровень
+	if(chenge){
+	ctx.clearRect(boxSize,boxSize*2,width,boxSize);
+	boxes[j].y += boxSize;
+    boxes[j].drawSquare(color,oldBack);
+	} 	    
+   //на случай если клавиша 40 нажата
+    if(boxes[i].x === boxes[j].x && boxes[i].y > newPositionBox && boxes[i].y < boxes[j].y || boxes[i].x === boxes[j].x && boxes[i].y === newPositionBox){
+	
+	  if(boxes[j].y > height/3+boxSize*2){
+	   boxes[i].y = newPositionBox;
+	   boxes[i].drawSquare(color,colorInside); 
+	   boxes[j].drawSquare(color,oldBack);  
+	   
+       if(boxes[i].y + boxSize >= boxes[j].y && boxes[j].color === colorFall){
+	     /*ЕСЛИ ХОЧЕШЬ ЦВЕТНОЙ УРОВЕНЬ
+		 boxes[j].drawSquare(colorFall,fallInside); */ 
+         boxes[j].drawSquare(color,colorInside);
+	   } 
+	   i++;
+	   helpPoint = randomX;   
+	   getRandomPosition();
+	   boxes.push(new Box);
+	  } else {
+	   clearInterval(interval);
+	   ctx.clearRect(boxSize,boxSize,width, height/4);
+	   ctx.font = "40px serif";
+       ctx.fillStyle = 'Red';
+       ctx.fillText('The End!',width/2 -boxSize*4, boxSize*5);
+       alert('The End');
+	  
+	  }
+    }
+   }
+  }
+ drawBorder(); 
+},5);
+
+
+</script>
+</body>
+</html>
